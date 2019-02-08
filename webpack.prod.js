@@ -82,7 +82,7 @@ module.exports = {
             inject: 'body',
         }),
         new CleanWebpackPlugin(buildPath),
-        new FaviconsWebpackPlugin({
+        /* new FaviconsWebpackPlugin({
             // Your source logo
             logo: './src/assets/icon.png',
             // The prefix for all image files (might be a folder or a name)
@@ -110,7 +110,7 @@ module.exports = {
                 yandex: false,
                 windows: false
             }
-        }),
+        }), */
         new MiniCssExtractPlugin({
             filename: 'styles.[contenthash].css'
         }),

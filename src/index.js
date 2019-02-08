@@ -1,3 +1,5 @@
+import './styles/global.css'
+
 // BEGIN Calculations specific to the A/B Testing Visualization
 const jStat = require('jStat').jStat;
 window.jStat = jStat
@@ -83,6 +85,8 @@ var lookerVisualizationOptions = {
     default: "unicycle"
   }*/
 }
+
+throw new Error;
 
 looker.plugins.visualizations.add({
   // Id and Label are legacy properties that no longer have any function besides documenting
