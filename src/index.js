@@ -7,6 +7,15 @@ window.jStat = jStat
 const pdfOfAandB = function(x1, x2, S1, F1, S2, F2) {
   return jStat.beta.pdf(x1, S1, F1) * jStat.beta.pdf(x2, S2, F2)
 }
+
+const sampleFromBeta = function(N, alpha, beta) {
+  let out = []
+  for (let i = 0; i < N; i++) {
+    out.push(jStat.beta.sample(alpha, beta))
+  }
+  return out
+}
+
 function integrate (f, start, end, step) {
   let total = 0
   step = step || 0.01
@@ -20,16 +29,31 @@ function integrate (f, start, end, step) {
   return total
 }
 
-const S1 = 50000;
-const F1 = 50000;
-const S2 = 51000;
-const F2 = 49000;
+const S1 = 500;
+const F1 = 500;
+const S2 = 500;
+const F2 = 500;
 
 let startTime = new Date(); 
 console.log(integrate(pdfOfAandB, 0, 1, 0.001))
 let timeDiff = new Date() - startTime;
 console.log(timeDiff)
 // END Calculations specific to the A/B Testing Visualization
+
+startTime = new Date(); 
+
+const N = 1e5
+let vecA = sampleFromBeta(N, S1, F1)
+let vecB = sampleFromBeta(N, S2, F2)
+window.vecA = vecA
+window.vecB = vecB
+
+let AminusB = vecA.map( (val, ind) => val - vecB[ind])
+let probAGreaterThanB = AminusB.map( (val) => val > 0 ? 1 : 0).reduce( (acc, val) => acc + val) / N
+console.log('Prob A > B ' + probAGreaterThanB)
+console.log(jStat.quantiles(AminusB, [.05, .95]))
+timeDiff = new Date() - startTime;
+console.log(timeDiff)
 
 var lookerVisualizationOptions = {
   skip_intermediate_nulls: {
