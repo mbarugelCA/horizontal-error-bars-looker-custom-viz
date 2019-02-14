@@ -1,59 +1,5 @@
 import './styles/global.css'
-
-// BEGIN Calculations specific to the A/B Testing Visualization
-const jStat = require('jStat').jStat;
-window.jStat = jStat
-
-const pdfOfAandB = function(x1, x2, S1, F1, S2, F2) {
-  return jStat.beta.pdf(x1, S1, F1) * jStat.beta.pdf(x2, S2, F2)
-}
-
-const sampleFromBeta = function(N, alpha, beta) {
-  let out = []
-  for (let i = 0; i < N; i++) {
-    out.push(jStat.beta.sample(alpha, beta))
-  }
-  return out
-}
-
-function integrate (f, start, end, step) {
-  let total = 0
-  step = step || 0.01
-  // Integrate over X2 > X1
-  for (let x1 = start; x1 < end; x1 += step) {
-    for (let x2 = x1; x2 < end; x2 += step) {
-      //total += f(x + step / 2) * step
-      total += f(x1 + step/2, x2 + step/2, S1, F1, S2, F2) * step * step
-    }
-  }
-  return total
-}
-
-const S1 = 500;
-const F1 = 500;
-const S2 = 500;
-const F2 = 500;
-
-let startTime = new Date(); 
-console.log(integrate(pdfOfAandB, 0, 1, 0.001))
-let timeDiff = new Date() - startTime;
-console.log(timeDiff)
-// END Calculations specific to the A/B Testing Visualization
-
-startTime = new Date(); 
-
-const N = 1e5
-let vecA = sampleFromBeta(N, S1, F1)
-let vecB = sampleFromBeta(N, S2, F2)
-window.vecA = vecA
-window.vecB = vecB
-
-let AminusB = vecA.map( (val, ind) => val - vecB[ind])
-let probAGreaterThanB = AminusB.map( (val) => val > 0 ? 1 : 0).reduce( (acc, val) => acc + val) / N
-console.log('Prob A > B ' + probAGreaterThanB)
-console.log(jStat.quantiles(AminusB, [.05, .95]))
-timeDiff = new Date() - startTime;
-console.log(timeDiff)
+const processLooker = true;
 
 var lookerVisualizationOptions = {
   skip_intermediate_nulls: {
@@ -110,7 +56,7 @@ var lookerVisualizationOptions = {
   }*/
 }
 
-throw new Error;
+if (!processLooker) throw new Error;
 
 looker.plugins.visualizations.add({
   // Id and Label are legacy properties that no longer have any function besides documenting
@@ -122,8 +68,6 @@ looker.plugins.visualizations.add({
   // Set up the initial state of the visualization
   create: function(element, config) {
     
-    $('head').append( $('<link rel="stylesheet" type="text/css" />').attr('href', 'https://localhost:4443/dependencies/global.css') );
-
     // Insert a <style> tag with some styles we'll use later.
     element.innerHTML = `
       <style>
@@ -150,19 +94,29 @@ looker.plugins.visualizations.add({
   updateAsync: function(data, element, config, queryResponse, details, done) {
     
     // Set some global variables to help with debugging
-    theData = data
-    theQuery = queryResponse
-    theOptions = config
-    self = this
+    let theData = data
+    let theQuery = queryResponse
+    let theOptions = config
+    let self = this
+    window.theData = theData
+    window.theQuery = theQuery
+    window.theOptions = theOptions
+
     this._textElement.id = "canvas";
+    this._textElement.style.height = "100%"
+    this._textElement.innerHTML = `
+      <iframe style="border: 0"
+        src="https://docs.google.com/a/consumeraffairs.com/spreadsheets/d/e/2PACX-1vRBxeLtUKBUbmPu1waUroAQIjd9tGg3nNLIKxyl9sgwlTyf5_xsmX6NyujcH4NJqaIBy9Ba-fLMBMJH/pubhtml?gid=1025025321&single=true&widget=false&headers=false&range=A34:F37&chrome=false" width="1000" height="100">
+      </iframe>
+    `;
     
     // Check for errors
     var requirementsMet = HandleErrors(this, queryResponse, {
-      min_measures: 1, 
-      max_measures: 1, 
+      min_measures: 0, 
+      max_measures: 99, 
       min_pivots: 0, 
-      max_pivots: 0, 
-      min_dimensions:1, 
+      max_pivots: 99, 
+      min_dimensions:0, 
       max_dimensions: 99,
     })
     if (!requirementsMet) return
@@ -190,15 +144,6 @@ looker.plugins.visualizations.add({
     
     // Insert the data into the page
     // this._textElement.innerHTML = LookerCharts.Utils.htmlForCell(firstCell);
-
-    // Set the size to the user-selected size
-    /*
-    if (config.font_size == "small") {
-      this._textElement.className = "hello-world-text-small";
-    } else {
-      this._textElement.className = "hello-world-text-large";
-    }
-    */
 
     // We are done rendering! Let Looker know.
     done()

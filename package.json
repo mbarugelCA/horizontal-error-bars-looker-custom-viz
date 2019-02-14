@@ -21,8 +21,6 @@
     },
     "homepage": "",
     "dependencies": {
-        "jStat": "^1.7.1",
-        "map-keys-deep-lodash": "^1.2.2",
         "normalize.css": "^8.0.0"
     },
     "devDependencies": {
