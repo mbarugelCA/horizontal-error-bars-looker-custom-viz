@@ -21,7 +21,9 @@
     },
     "homepage": "",
     "dependencies": {
-        "normalize.css": "^8.0.0"
+        "jstat": "^1.9.0",
+        "normalize.css": "^8.0.0",
+        "plotly.js": "^1.49.2"
     },
     "devDependencies": {
         "ajv": "^6.3.0",

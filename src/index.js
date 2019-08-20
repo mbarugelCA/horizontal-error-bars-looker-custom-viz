@@ -1,6 +1,11 @@
 import './styles/global.css'
 const processLooker = true;
 
+
+let jStat = require('jstat').jStat;
+let Plotly = require('plotly.js');
+//let Plotly = require('plotly.js/lib/index-basic');
+
 var lookerVisualizationOptions = {
   skip_intermediate_nulls: {
     section: "Main",
@@ -104,12 +109,53 @@ looker.plugins.visualizations.add({
 
     this._textElement.id = "canvas";
     this._textElement.style.height = "100%"
+
+    // SAMPLE: add HTML to the canvas
     this._textElement.innerHTML = `
-      <iframe style="border: 0"
-        src="https://docs.google.com/a/consumeraffairs.com/spreadsheets/d/e/2PACX-1vRBxeLtUKBUbmPu1waUroAQIjd9tGg3nNLIKxyl9sgwlTyf5_xsmX6NyujcH4NJqaIBy9Ba-fLMBMJH/pubhtml?gid=1025025321&single=true&widget=false&headers=false&range=A34:F37&chrome=false" width="1000" height="100">
-      </iframe>
+      <h1>
+        Hello World!
+      </h1>
     `;
+
+    // SAMPLE: add Plotly chart to canvas, after title
+    let chartElement = document.createElement('div');
+    chartElement.id = 'the-plotly-chart'
+    this._textElement.appendChild(chartElement);
     
+    let figureSample = require('./plotly-sample/figure.js').figure;
+    Plotly.plot(chartElement,  {
+      data: figureSample.data,
+      layout: figureSample.layout,
+      frames: figureSample.frames,
+      config: {
+        displayModeBar: false
+      }
+    }).then(function() {
+      console.log('Finished loading. Now resizing.');
+      resizePlot();
+    });
+
+    // SAMPLE: handle auto-resizing for Plotly chart
+    let resizeDebounce = null;
+    function resizePlot() {
+        //let bb = chartElement.getBoundingClientRect();
+        let bb = document.getElementById('canvas').getBoundingClientRect();
+        console.log('Resizing! Height ' + bb.height);
+        Plotly.relayout(chartElement, {
+            width: bb.width,
+            height: bb.height - 70
+        });
+    }
+    window.addEventListener('resize', function() {
+        if (resizeDebounce) {
+            window.clearTimeout(resizeDebounce);
+        }
+        resizeDebounce = window.setTimeout(resizePlot, 100);
+    });
+    
+    
+    
+
     // Check for errors
     var requirementsMet = HandleErrors(this, queryResponse, {
       min_measures: 0, 
