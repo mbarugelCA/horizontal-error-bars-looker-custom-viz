@@ -7,14 +7,7 @@ let Plotly = require('plotly.js');
 //let Plotly = require('plotly.js/lib/index-basic');
 
 var lookerVisualizationOptions = {
-  skip_intermediate_nulls: {
-    section: "Main",
-    type: "boolean",
-    label: "Skip intermediate nulls",
-    order: 1,
-    default: false,
-  },
-  /*color_range: {
+  color_range: {
     order: 4,
     section: "Colors",
     type: "array",
@@ -22,6 +15,7 @@ var lookerVisualizationOptions = {
     display: "colors",
     display_size: "third",
   },
+  /*
   top_label: {
     order: 3,
     section: "Colors",
