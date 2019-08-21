@@ -8,7 +8,7 @@ module.exports = {
     devServer: {
         port: 4443,
         contentBase: path.join(__dirname, "dist"),
-        https: true,
+        https: true
     },
     node: {
         fs: 'empty'

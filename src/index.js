@@ -1,5 +1,6 @@
 import './styles/global.css'
-import { countBy, mapValues } from 'lodash-es';
+import { countBy, mapValues, cloneDeep, sortBy } from 'lodash-es';
+let figureSample = require('./plotly-sample/figure.js').figure;
 
 // Simulation parameters
 const Nsims = 10000;
@@ -126,17 +127,40 @@ looker.plugins.visualizations.add({
 
     if (theQuery.fields.dimensions.length == 1) {
       // If there's one dimension, each row represents a variant.
-      let variantFieldName = theQuery.fields.dimensions[0].name;
+      let variantNameFieldName = theQuery.fields.dimensions[0].name;
       let nVariants = theData.length;
 
+      let paramObject = {};
+      for (let variant = 0; variant < nVariants; variant++) {
+        let variantName = theData[variant][variantNameFieldName].value;
+        let successes = theData[variant][nSuccessFieldName].value ;
+        let trials = theData[variant][nTrialFieldName].value;
+        paramObject[variantName] = [successes, trials]
+      }
+      let simResults = simulateProbVariantIsBest(paramObject);
+
+      window.simResults = simResults;
+      console.log(generatePlotlyTraceArray(simResults));
+      figureSample.data = generatePlotlyTraceArray(simResults);
+    }
+
+    /** @description Computes the probability that each variant beats all others.  
+     * @param {Object} paramArray An object with one key for each variant. The value for each key should be the number of successes and
+     * number of trials for the variant. Example: {"c": [2, 100], "v1": [6, 102]} 
+     * @return {Object} An object with one key for each variant, showing the probability that it is the best.
+    */  
+    function simulateProbVariantIsBest(paramArray) {
       // Generate array of arrays of random beta values.
       // Each "row" is a simulation instance and each "column" represents a variant
       let samplesArray = Array();
-      for (let variant = 0; variant < nVariants; variant++) {
+      let variantNamesArray = Array();
+      for (let [variantName, variantData] of Object.entries(paramArray)) {
+        variantNamesArray.push(variantName);
+
         let sample = Array();
-        let alpha = priorAlpha + theData[variant][nSuccessFieldName].value ;
-        let beta = priorBeta + Math.max(0, theData[variant][nTrialFieldName].value - theData[variant][nSuccessFieldName].value);
-        console.log('Simulating variant in row ' + (variant+1) + ' with alpha=' + alpha + ' and beta=' + beta);
+        let alpha = priorAlpha + variantData[0];
+        let beta = priorBeta + Math.max(0, variantData[1] - variantData[0]);
+        console.log('Simulating variant ' + variantName + ' with alpha=' + alpha + ' and beta=' + beta);
         for (let i = 0; i < Nsims; i++) {
           sample.push(jStat.beta.sample(alpha, beta))
         }
@@ -145,18 +169,45 @@ looker.plugins.visualizations.add({
       samplesArray = jStat.transpose(samplesArray);
       
       // Find the top variant for each simulation, and tabulate the results
-      let topVariant = Array()
+      let topVariantArray = Array()
       for (let sim = 0; sim < samplesArray.length; sim++) {
-        topVariant.push(samplesArray[sim].indexOf(Math.max(...samplesArray[sim])))
+        let indexOfMax = samplesArray[sim].indexOf(Math.max(...samplesArray[sim]));
+        topVariantArray.push(variantNamesArray[indexOfMax])
       }
-      let topVariantFreqTable = mapValues(countBy(topVariant), (x) => Math.round(100*x/Nsims));
-      window.topVariantFreqTable = topVariantFreqTable;
+      // To prevent cases in which a variant has no elements in which it's top, add a fake 'success' for each variant.
+      // With a large enough N, this addition is irrelevant (with N = 10,000, this adds a 0.01% prob of being top)
+      topVariantArray = topVariantArray.concat(variantNamesArray);
 
-
+      let topVariantFreqTable = mapValues(countBy(topVariantArray), (x) => Math.round(100*x/Nsims));
+      return topVariantFreqTable;
     }
 
+    function generatePlotlyTraceArray(topVariantFreqTable) {
+      console.log('Generating traces');
+      console.log(topVariantFreqTable);
+      let traceSample = require('./plotly-sample/figure.js').traceSample;
+
+      let traceArray = [];
+      let sortedFreqTable = sortBy(Object.entries(topVariantFreqTable), (x) => x[0])
+      for (let [variantName, variantProb] of sortedFreqTable) {
+        let thisTrace = cloneDeep(traceSample);
+        thisTrace["name"] = variantName;
+        thisTrace["x"] = [variantProb];
+        thisTrace["y"] = [''];
+        let thisText = variantProb + '%';
+        if (variantProb > 50 && variantProb === Math.max(...Object.values(topVariantFreqTable))) {
+          thisText = thisText + ' &#x2b50;'
+        }
+        thisTrace["text"] = [thisText];
+
+        traceArray.push(thisTrace)
+      }
+      return traceArray;
+    }
+
+
     // Generate one trace per variant for plotting
-    let figureSample = require('./plotly-sample/figure.js').figure;
+    
     Plotly.purge(chartElement);
     Plotly.plot(chartElement,  {
       data: figureSample.data,
