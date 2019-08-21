@@ -1,5 +1,5 @@
 import './styles/global.css'
-import { countBy, mapValues, cloneDeep, sortBy } from 'lodash-es';
+import { countBy, mapValues, cloneDeep, sortBy, uniq, map } from 'lodash-es';
 let figureSample = require('./plotly-sample/figure.js').figure;
 
 // Simulation parameters
@@ -122,12 +122,12 @@ looker.plugins.visualizations.add({
     window.jStat = jStat;
 
     // Get measure names. The first one is assumed to be the number of trials; the second one is the number of successes.
-    let nTrialFieldName = theQuery.fields.measures[0].name;
-    let nSuccessFieldName = theQuery.fields.measures[1].name;
+    let nTrialFieldName = theQuery.fields.measure_like[0].name;
+    let nSuccessFieldName = theQuery.fields.measure_like[1].name;
 
-    if (theQuery.fields.dimensions.length == 1) {
-      // If there's one dimension, each row represents a variant.
-      let variantNameFieldName = theQuery.fields.dimensions[0].name;
+    if (theQuery.fields.dimension_like.length == 1) {
+      // If there's 1 dimension, each row represents a variant.
+      let variantNameFieldName = theQuery.fields.dimension_like[0].name;
       let nVariants = theData.length;
 
       let paramObject = {};
@@ -138,17 +138,48 @@ looker.plugins.visualizations.add({
         paramObject[variantName] = [successes, trials]
       }
       let simResults = simulateProbVariantIsBest(paramObject);
-
-      window.simResults = simResults;
-      console.log(generatePlotlyTraceArray(simResults));
       figureSample.data = generatePlotlyTraceArray(simResults);
+
+    } else if (theQuery.fields.dimension_like.length == 2) {
+      // If there's 2 dimensions, each row represents a segment-variant combination.
+      // We assume that the first dimension represents a segment, and the second one is a variant.
+      let segmentNameFieldName = theQuery.fields.dimension_like[0].name;
+      let variantNameFieldName = theQuery.fields.dimension_like[1].name;
+
+      let variantNames = uniq(map(theData, (x) => String(x[variantNameFieldName].value)));
+      let nVariants = variantNames.length;
+
+      let segmentNames = uniq(map(theData, (x) => x[segmentNameFieldName].value))
+      let nSegments = segmentNames.length;
+
+      // Initialize objects for simulation
+      let paramObject = {};
+      for (let segmentName of segmentNames) {
+        paramObject[segmentName] = {}
+      }
+      let simObject = cloneDeep(paramObject);
+
+      for (let thisData of theData) {
+        let segmentName = thisData[segmentNameFieldName].value;
+        let variantName = thisData[variantNameFieldName].value;
+        let successes = thisData[nSuccessFieldName].value ;
+        let trials = thisData[nTrialFieldName].value;
+        paramObject[segmentName][variantName] = [successes, trials]
+      }
+      
+      // Generate sims and store results within the original paramObject
+      for (let [key, val] of Object.entries(simObject)) {
+        simObject[key] = simulateProbVariantIsBest(paramObject[key]);
+      }
+      console.log(simObject);
+
     }
 
     /** @description Computes the probability that each variant beats all others.  
      * @param {Object} paramArray An object with one key for each variant. The value for each key should be the number of successes and
      * number of trials for the variant. Example: {"c": [2, 100], "v1": [6, 102]} 
      * @return {Object} An object with one key for each variant, showing the probability that it is the best.
-    */  
+     */  
     function simulateProbVariantIsBest(paramArray) {
       // Generate array of arrays of random beta values.
       // Each "row" is a simulation instance and each "column" represents a variant
@@ -287,7 +318,7 @@ looker.plugins.visualizations.add({
 function HandleErrors(vis, res, options) {
   var fields = res.fields
   var pivots = fields.pivots
-  var dimensions = fields.dimensions
+  var dimensions = fields.dimension_like
   var measures = fields.measure_like
   
   return (checkErrors(vis, 'pivot-req', 'Pivot', pivots.length, options.min_pivots, options.max_pivots)
