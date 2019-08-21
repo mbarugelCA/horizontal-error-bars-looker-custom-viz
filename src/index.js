@@ -1,4 +1,10 @@
 import './styles/global.css'
+
+// Simulation parameters
+const Nsims = 10000;
+const priorAlpha = 1;
+const priorBeta = 10;
+
 const processLooker = true;
 
 
@@ -87,11 +93,21 @@ looker.plugins.visualizations.add({
 
     // Create an element to contain the text.
     this._textElement = container.appendChild(document.createElement("div"));
+    
+    this._textElement.id = "canvas";
+    this._textElement.style.height = "100%"
+
+    // SAMPLE: add Plotly chart to canvas, after title
+    let chartElement = document.createElement('div');
+    chartElement.id = 'the-plotly-chart'
+    this._textElement.appendChild(chartElement);
 
   },
   // Render in response to the data or settings changing
   updateAsync: function(data, element, config, queryResponse, details, done) {
     
+    let chartElement = document.getElementById('the-plotly-chart');
+
     // Set some global variables to help with debugging
     let theData = data
     let theQuery = queryResponse
@@ -101,22 +117,46 @@ looker.plugins.visualizations.add({
     window.theQuery = theQuery
     window.theOptions = theOptions
 
-    this._textElement.id = "canvas";
-    this._textElement.style.height = "100%"
+    window.jStat = jStat;
 
-    // SAMPLE: add HTML to the canvas
-    this._textElement.innerHTML = `
-      <h1>
-        Hello World!
-      </h1>
-    `;
+    // Get measure names. The first one is assumed to be the number of trials; the second one is the number of successes.
+    let nTrialFieldName = theQuery.fields.measures[0].name;
+    let nSuccessFieldName = theQuery.fields.measures[1].name;
 
-    // SAMPLE: add Plotly chart to canvas, after title
-    let chartElement = document.createElement('div');
-    chartElement.id = 'the-plotly-chart'
-    this._textElement.appendChild(chartElement);
+    if (theQuery.fields.dimensions.length == 1) {
+      console.log('Calculating beta')
+      // If there's one dimension, each row represents a variant.
+      let variantFieldName = theQuery.fields.dimensions[0].name;
+      let nVariants = theData.length;
+
+      let samplesArray = Array();
+      for (let variant = 0; variant < nVariants; variant++) {
+        let sample = Array();
+        let alpha = priorAlpha + theData[variant][nSuccessFieldName].value ;
+        let beta = priorBeta + Math.max(0, theData[variant][nTrialFieldName].value - theData[variant][nSuccessFieldName].value);
+        console.log('Simulating variant in row ' + (variant+1) + ' with alpha=' + alpha + ' and beta=' + beta);
+        for (let i = 0; i < Nsims; i++) {
+          sample.push(jStat.beta.sample(alpha, beta))
+        }
+        samplesArray.push(sample);
+      }
+      window.samplesArray = samplesArray;
+
+      for (let sim = 0; sim < samplesArray[0].length; sim++) {
+        let initialVal = 0;
+        
+      }
+
+    }
+
+    
+
+    
+
+    
     
     let figureSample = require('./plotly-sample/figure.js').figure;
+    Plotly.purge(chartElement);
     Plotly.plot(chartElement,  {
       data: figureSample.data,
       layout: figureSample.layout,
