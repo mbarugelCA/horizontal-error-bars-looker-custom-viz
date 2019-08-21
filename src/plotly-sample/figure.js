@@ -1,29 +1,46 @@
+let traceSample = {
+    "mode": "markers",
+    "name": "Variant A",
+    "type": "bar",
+    "x": [
+        "60",
+        "",
+        "30"
+    ],
+    "y": [
+        "Tablet",
+        "Mobile",
+        "Desktop"
+    ],
+    "text": [
+        "60% &#x2b50;",
+        "",
+        "30%"
+    ],
+    "textfont": {
+        "size": 20,
+        "family": "Roboto"
+    },
+    "orientation": "h",
+    "textposition": "inside"
+};
+
 let figure = {
     "data": [
         {
-            "meta": {
-                "columnNames": {
-                    "x": "A",
-                    "y": "D",
-                    "text": "E"
-                }
-            },
             "mode": "markers",
             "name": "Variant A",
             "type": "bar",
-            "xsrc": "mbarugel:6:d90a37",
             "x": [
                 "60",
                 "",
                 "30"
             ],
-            "ysrc": "mbarugel:6:52ba71",
             "y": [
                 "Tablet",
                 "Mobile",
                 "Desktop"
             ],
-            "textsrc": "mbarugel:6:a9071a",
             "text": [
                 "60% &#x2b50;",
                 "",
@@ -37,28 +54,18 @@ let figure = {
             "textposition": "inside"
         },
         {
-            "meta": {
-                "columnNames": {
-                    "x": "B",
-                    "y": "D",
-                    "text": "F"
-                }
-            },
             "name": "Variant B",
             "type": "bar",
-            "xsrc": "mbarugel:6:42e199",
             "x": [
                 "30",
                 "95",
                 "5"
             ],
-            "ysrc": "mbarugel:6:52ba71",
             "y": [
                 "Tablet",
                 "Mobile",
                 "Desktop"
             ],
-            "textsrc": "mbarugel:6:2ee100",
             "text": [
                 "30%",
                 "95% &#x2b50;",
@@ -72,29 +79,19 @@ let figure = {
             "textposition": "inside"
         },
         {
-            "meta": {
-                "columnNames": {
-                    "x": "C",
-                    "y": "D",
-                    "text": "G"
-                }
-            },
             "name": "Variant C",
             "type": "bar",
-            "xsrc": "mbarugel:6:fb89f2",
             "x": [
                 "10",
                 "5",
                 "65"
             ],
-            "ysrc": "mbarugel:6:52ba71",
             "y": [
                 "Tablet",
                 "Mobile",
                 "Desktop"
             ],
             "opacity": 1,
-            "textsrc": "mbarugel:6:8b3da9",
             "text": [
                 "10%",
                 "5%",
@@ -115,6 +112,7 @@ let figure = {
                 0,
                 105.26315789473685
             ],
+            "ticksuffix": '%',
             "title": {
                 "text": "Probability that variant beats others"
             },
@@ -122,10 +120,6 @@ let figure = {
         },
         "yaxis": {
             "type": "category",
-            "range": [
-                -0.5,
-                2.5
-            ],
             "autorange": true
         },
         "barmode": "stack",
@@ -146,5 +140,6 @@ let figure = {
 }
 
 module.exports = {
-    figure: figure
+    figure: figure,
+    traceSample: traceSample
 }

@@ -1,4 +1,5 @@
 import './styles/global.css'
+import { countBy, mapValues } from 'lodash-es';
 
 // Simulation parameters
 const Nsims = 10000;
@@ -124,11 +125,12 @@ looker.plugins.visualizations.add({
     let nSuccessFieldName = theQuery.fields.measures[1].name;
 
     if (theQuery.fields.dimensions.length == 1) {
-      console.log('Calculating beta')
       // If there's one dimension, each row represents a variant.
       let variantFieldName = theQuery.fields.dimensions[0].name;
       let nVariants = theData.length;
 
+      // Generate array of arrays of random beta values.
+      // Each "row" is a simulation instance and each "column" represents a variant
       let samplesArray = Array();
       for (let variant = 0; variant < nVariants; variant++) {
         let sample = Array();
@@ -140,21 +142,20 @@ looker.plugins.visualizations.add({
         }
         samplesArray.push(sample);
       }
-      window.samplesArray = samplesArray;
-
-      for (let sim = 0; sim < samplesArray[0].length; sim++) {
-        let initialVal = 0;
-        
+      samplesArray = jStat.transpose(samplesArray);
+      
+      // Find the top variant for each simulation, and tabulate the results
+      let topVariant = Array()
+      for (let sim = 0; sim < samplesArray.length; sim++) {
+        topVariant.push(samplesArray[sim].indexOf(Math.max(...samplesArray[sim])))
       }
+      let topVariantFreqTable = mapValues(countBy(topVariant), (x) => Math.round(100*x/Nsims));
+      window.topVariantFreqTable = topVariantFreqTable;
+
 
     }
 
-    
-
-    
-
-    
-    
+    // Generate one trace per variant for plotting
     let figureSample = require('./plotly-sample/figure.js').figure;
     Plotly.purge(chartElement);
     Plotly.plot(chartElement,  {
