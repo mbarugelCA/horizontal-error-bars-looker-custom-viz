@@ -108,6 +108,17 @@ looker.plugins.visualizations.add({
   // Render in response to the data or settings changing
   updateAsync: function(data, element, config, queryResponse, details, done) {
     
+    // Check for errors
+    var requirementsMet = HandleErrors(this, queryResponse, {
+      min_measures: 2, 
+      max_measures: 2, 
+      min_pivots: 0, 
+      max_pivots: 0, 
+      min_dimensions: 1, 
+      max_dimensions: 2,
+    })
+    if (!requirementsMet) return
+
     let chartElement = document.getElementById('the-plotly-chart');
 
     // Set some global variables to help with debugging
@@ -137,7 +148,11 @@ looker.plugins.visualizations.add({
         let trials = theData[variant][nTrialFieldName].value;
         paramObject[variantName] = [successes, trials]
       }
+
+      // Generate sim results
       let simObject = {'Overall': simulateProbVariantIsBest(paramObject)};
+
+      // Generate Traces
       figureSample.data = generatePlotlyTraceArray(simObject);
 
     } else if (theQuery.fields.dimension_like.length == 2) {
@@ -223,6 +238,7 @@ looker.plugins.visualizations.add({
     // Each value is an object in which each key is a variant and each value is the probability that that variant is the best.
     // Example: {'Desktop': {'c': 90, 'v1': 10}, 'Mobile': {'c': 100}}
     function generatePlotlyTraceArray(topVariantFreqTableBySegment) {
+
       let traceSample = require('./plotly-sample/figure.js').traceSample;
 
       let traceArray = [];
@@ -301,16 +317,7 @@ looker.plugins.visualizations.add({
     
     
 
-    // Check for errors
-    var requirementsMet = HandleErrors(this, queryResponse, {
-      min_measures: 0, 
-      max_measures: 99, 
-      min_pivots: 0, 
-      max_pivots: 99, 
-      min_dimensions:0, 
-      max_dimensions: 99,
-    })
-    if (!requirementsMet) return
+    
 
 
     // EXAMPLE: Register additional options
