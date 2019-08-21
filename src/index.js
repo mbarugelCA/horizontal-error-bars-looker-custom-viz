@@ -1,5 +1,5 @@
 import './styles/global.css'
-import { countBy, mapValues, cloneDeep, sortBy, uniq, map } from 'lodash-es';
+import { countBy, mapValues, cloneDeep, uniq, map } from 'lodash-es';
 let figureSample = require('./plotly-sample/figure.js').figure;
 
 // Simulation parameters
@@ -11,8 +11,8 @@ const processLooker = true;
 
 
 let jStat = require('jstat').jStat;
-let Plotly = require('plotly.js');
-//let Plotly = require('plotly.js/lib/index-basic');
+//let Plotly = require('plotly.js');
+let Plotly = require('plotly.js/lib/index-basic');
 
 var lookerVisualizationOptions = {
   color_range: {
@@ -137,8 +137,8 @@ looker.plugins.visualizations.add({
         let trials = theData[variant][nTrialFieldName].value;
         paramObject[variantName] = [successes, trials]
       }
-      let simResults = simulateProbVariantIsBest(paramObject);
-      figureSample.data = generatePlotlyTraceArray(simResults);
+      let simObject = {'Overall': simulateProbVariantIsBest(paramObject)};
+      figureSample.data = generatePlotlyTraceArray(simObject);
 
     } else if (theQuery.fields.dimension_like.length == 2) {
       // If there's 2 dimensions, each row represents a segment-variant combination.
@@ -167,12 +167,14 @@ looker.plugins.visualizations.add({
         paramObject[segmentName][variantName] = [successes, trials]
       }
       
-      // Generate sims and store results within the original paramObject
+      // Generate sims and store results
       for (let [key, val] of Object.entries(simObject)) {
         simObject[key] = simulateProbVariantIsBest(paramObject[key]);
       }
-      console.log(simObject);
-
+      
+      // Generate traces
+      figureSample.data = generatePlotlyTraceArray(simObject);
+      
     }
 
     /** @description Computes the probability that each variant beats all others.  
@@ -209,33 +211,59 @@ looker.plugins.visualizations.add({
       // With a large enough N, this addition is irrelevant (with N = 10,000, this adds a 0.01% prob of being top)
       topVariantArray = topVariantArray.concat(variantNamesArray);
 
-      let topVariantFreqTable = mapValues(countBy(topVariantArray), (x) => Math.round(100*x/Nsims));
+      let topVariantFreqTable = mapValues(countBy(topVariantArray), (x) => 100*x/Nsims);
+
+
       return topVariantFreqTable;
     }
 
-    function generatePlotlyTraceArray(topVariantFreqTable) {
-      console.log('Generating traces');
-      console.log(topVariantFreqTable);
+    // TODO: Write doc for this function
+    // Input variable must be an object. 
+    // Each key in this object is the segment of the experiment.
+    // Each value is an object in which each key is a variant and each value is the probability that that variant is the best.
+    // Example: {'Desktop': {'c': 90, 'v1': 10}, 'Mobile': {'c': 100}}
+    function generatePlotlyTraceArray(topVariantFreqTableBySegment) {
       let traceSample = require('./plotly-sample/figure.js').traceSample;
 
       let traceArray = [];
-      let sortedFreqTable = sortBy(Object.entries(topVariantFreqTable), (x) => x[0])
-      for (let [variantName, variantProb] of sortedFreqTable) {
+
+      // Restructure object so that each key is a variant, and each value has the values for that variant by segment
+      // Example: {'c': {'Mobile': 100, 'Desktop': 90}, 'v1': {'Desktop': 10}}
+      let segmentNames = Object.keys(topVariantFreqTableBySegment).sort();
+      let variantNames = []
+      for (let segment of segmentNames) {
+        variantNames = variantNames.concat(Object.keys(topVariantFreqTableBySegment[segment]));
+      }
+      variantNames = uniq(variantNames).sort();
+
+      let experimentDataRestructured = {}
+      for (let variant of variantNames) {
+        experimentDataRestructured[variant] = {}
+        for (let segment of segmentNames) {
+          experimentDataRestructured[variant][segment] = topVariantFreqTableBySegment[segment][variant]
+        }
+      }
+      
+      // Generate traces
+      for (let [variantName, topVariantFreqTableBySegment] of Object.entries(experimentDataRestructured)) {
         let thisTrace = cloneDeep(traceSample);
         thisTrace["name"] = variantName;
-        thisTrace["x"] = [variantProb];
-        thisTrace["y"] = [''];
-        let thisText = variantProb + '%';
-        if (variantProb > 50 && variantProb === Math.max(...Object.values(topVariantFreqTable))) {
-          thisText = thisText + ' &#x2b50;'
+        thisTrace["x"] = [];
+        thisTrace["y"] = [];
+        thisTrace["text"] = [];
+        for (let [segmentName, variantProb] of Object.entries(topVariantFreqTableBySegment)) {
+          thisTrace["x"].push(variantProb);
+          thisTrace["y"].push(segmentName);
+          let thisText = Math.round(variantProb) + '%';
+          if (variantProb > 75) {
+            thisText = thisText + ' &#x2b50;'
+          }
+          thisTrace["text"].push(thisText);
         }
-        thisTrace["text"] = [thisText];
-
         traceArray.push(thisTrace)
       }
       return traceArray;
     }
-
 
     // Generate one trace per variant for plotting
     
