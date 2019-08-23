@@ -283,8 +283,8 @@ looker.plugins.visualizations.add({
 
     // Generate one trace per variant for plotting
     
-    Plotly.purge(chartElement);
-    Plotly.plot(chartElement,  {
+    //Plotly.purge(chartElement);
+    Plotly.react(chartElement,  {
       data: figureSample.data,
       layout: figureSample.layout,
       frames: figureSample.frames,
@@ -294,17 +294,27 @@ looker.plugins.visualizations.add({
     }).then(function() {
       console.log('Finished loading. Now resizing.');
       resizePlot();
+      window.chartElement = chartElement;
+      console.log(chartElement.layout);
+
+
     });
 
     // SAMPLE: handle auto-resizing for Plotly chart
     let resizeDebounce = null;
     function resizePlot() {
-        //let bb = chartElement.getBoundingClientRect();
         let bb = document.getElementById('canvas').getBoundingClientRect();
-        console.log('Resizing! Height ' + bb.height);
+        console.log('Resizing! Height of canvas: ' + bb.height);
+        // Set max height based on range of Y.
+        let yRange = Math.max(...chartElement.layout.yaxis.range) - Math.min(...chartElement.layout.yaxis.range);
+        console.log(yRange);
+        //let heightOfPlot = bb.height - 70;
+        let heightOfPlot = Math.min(bb.height, yRange*90) - 70;
+        console.log('Setting height to ' + heightOfPlot);
         Plotly.relayout(chartElement, {
             width: bb.width,
-            height: bb.height - 70
+            //height: Math.min(bb.height, yRange*90) - 70
+            height: heightOfPlot
         });
     }
     window.addEventListener('resize', function() {
