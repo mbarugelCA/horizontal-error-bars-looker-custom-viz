@@ -242,12 +242,13 @@ looker.plugins.visualizations.add({
       return topVariantFreqTable;
     }
 
-    // TODO: Write doc for this function
-    // Input variable must be an object. 
-    // Each key in this object is the segment of the experiment.
-    // Each value is an object in which each key is a variant and each value is the probability that that variant is the best.
-    // There's an optional additional key called '_sampleSize', which shows the total sample size across all variants, for display purposes.
-    // Example: {'Desktop': {'c': 90, 'v1': 10, '_sampleSize': 1392}, 'Mobile': {'c': 100, '_sampleSize': 248}}
+    /** @description Computes an array of traces that will be passed into the Plotly function for plotting.
+     * @param {Object} topVariantFreqTableBySegment Each key in this object is the segment of the experiment.
+     * Each value is an object in which each key is a variant and each value is the probability that that variant is the best.
+     * There's an optional additional key called '_sampleSize', which shows the total sample size across all variants, for display purposes.
+     * Example: {'Desktop': {'c': 90, 'v1': 10, '_sampleSize': 1392}, 'Mobile': {'c': 100, '_sampleSize': 248}}
+     * @return {Array} An array of 'trace' objects for Plotly
+     */  
     function generatePlotlyTraceArray(topVariantFreqTableBySegment) {
 
       let traceSample = require('./plotly-sample/figure.js').traceSample;
@@ -256,9 +257,7 @@ looker.plugins.visualizations.add({
       // Get sample size by segment, and remove the _sampleSize key
       let sampleSizeBySegment = mapValues(topVariantFreqTableBySegment, (x) => x['_sampleSize']);
       Object.keys(topVariantFreqTableBySegment).forEach( (key) => delete topVariantFreqTableBySegment[key]['_sampleSize'])
-      /*for (key in Object.keys(topVariantFreqTableBySegment))
-        delete topVariantFreqTableBySegment[key]['_sampleSize'];
-*/
+      
       // Restructure object so that each key is a variant, and each value has the values for that variant by segment
       // Example: {'c': {'Mobile': 100, 'Desktop': 90}, 'v1': {'Desktop': 10}}
       let segmentNames = Object.keys(topVariantFreqTableBySegment).sort();

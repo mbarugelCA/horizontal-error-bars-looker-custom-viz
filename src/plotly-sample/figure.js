@@ -129,10 +129,10 @@ let figure = {
         "hovermode": false,
         "margin": {
             "t": 10,
-            "b": 30,
+            "b": 50,
             "l": 80,
             "r": 80,
-            "pad": 0,
+            "pad": 5,
             "autoexpand": true
         }
     },
