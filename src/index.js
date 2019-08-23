@@ -1,5 +1,5 @@
 import './styles/global.css'
-import { countBy, mapValues, cloneDeep, uniq, map } from 'lodash-es';
+import { countBy, mapValues, cloneDeep, uniq, map, sumBy, reduce, isEqual } from 'lodash-es';
 let figureSample = require('./plotly-sample/figure.js').figure;
 
 // Simulation parameters
@@ -107,6 +107,7 @@ looker.plugins.visualizations.add({
   },
   // Render in response to the data or settings changing
   updateAsync: function(data, element, config, queryResponse, details, done) {
+    console.log('updateAsync triggered')
     
     // Check for errors
     var requirementsMet = HandleErrors(this, queryResponse, {
@@ -136,21 +137,29 @@ looker.plugins.visualizations.add({
     let nTrialFieldName = theQuery.fields.measure_like[0].name;
     let nSuccessFieldName = theQuery.fields.measure_like[1].name;
 
+    let nSegments;
+
     if (theQuery.fields.dimension_like.length == 1) {
-      // If there's 1 dimension, each row represents a variant.
+      // If there's 1 dimension, each row represents a variant. There's a single segment.
       let variantNameFieldName = theQuery.fields.dimension_like[0].name;
       let nVariants = theData.length;
+      nSegments = 1;
 
       let paramObject = {};
+      let sampleSize = 0
       for (let variant = 0; variant < nVariants; variant++) {
         let variantName = theData[variant][variantNameFieldName].value;
         let successes = theData[variant][nSuccessFieldName].value ;
         let trials = theData[variant][nTrialFieldName].value;
-        paramObject[variantName] = [successes, trials]
+        paramObject[variantName] = [successes, trials];
+        sampleSize = sampleSize + trials;
       }
 
       // Generate sim results
-      let simObject = {'Overall': simulateProbVariantIsBest(paramObject)};
+      let simResults = simulateProbVariantIsBest(paramObject);
+      // Add sample size of segment to results
+      simResults['_sampleSize'] = sampleSize;
+      let simObject = {'Overall': simResults};
 
       // Generate Traces
       figureSample.data = generatePlotlyTraceArray(simObject);
@@ -165,9 +174,10 @@ looker.plugins.visualizations.add({
       let nVariants = variantNames.length;
 
       let segmentNames = uniq(map(theData, (x) => x[segmentNameFieldName].value))
-      let nSegments = segmentNames.length;
+      nSegments = segmentNames.length;
 
       // Initialize objects for simulation
+      // simObject and paramObject will have one entry per segment
       let paramObject = {};
       for (let segmentName of segmentNames) {
         paramObject[segmentName] = {}
@@ -183,13 +193,13 @@ looker.plugins.visualizations.add({
       }
       
       // Generate sims and store results
-      for (let [key, val] of Object.entries(simObject)) {
-        simObject[key] = simulateProbVariantIsBest(paramObject[key]);
+      for (let [segment, val] of Object.entries(simObject)) {
+        simObject[segment] = simulateProbVariantIsBest(paramObject[segment]);
+        simObject[segment]['_sampleSize'] = reduce(paramObject[segment], (sum,val) => sum+val[1], 0); //add sample size (number of trials) across all variants for this segment
       }
       
       // Generate traces
       figureSample.data = generatePlotlyTraceArray(simObject);
-      
     }
 
     /** @description Computes the probability that each variant beats all others.  
@@ -236,13 +246,19 @@ looker.plugins.visualizations.add({
     // Input variable must be an object. 
     // Each key in this object is the segment of the experiment.
     // Each value is an object in which each key is a variant and each value is the probability that that variant is the best.
-    // Example: {'Desktop': {'c': 90, 'v1': 10}, 'Mobile': {'c': 100}}
+    // There's an optional additional key called '_sampleSize', which shows the total sample size across all variants, for display purposes.
+    // Example: {'Desktop': {'c': 90, 'v1': 10, '_sampleSize': 1392}, 'Mobile': {'c': 100, '_sampleSize': 248}}
     function generatePlotlyTraceArray(topVariantFreqTableBySegment) {
 
       let traceSample = require('./plotly-sample/figure.js').traceSample;
-
       let traceArray = [];
 
+      // Get sample size by segment, and remove the _sampleSize key
+      let sampleSizeBySegment = mapValues(topVariantFreqTableBySegment, (x) => x['_sampleSize']);
+      Object.keys(topVariantFreqTableBySegment).forEach( (key) => delete topVariantFreqTableBySegment[key]['_sampleSize'])
+      /*for (key in Object.keys(topVariantFreqTableBySegment))
+        delete topVariantFreqTableBySegment[key]['_sampleSize'];
+*/
       // Restructure object so that each key is a variant, and each value has the values for that variant by segment
       // Example: {'c': {'Mobile': 100, 'Desktop': 90}, 'v1': {'Desktop': 10}}
       let segmentNames = Object.keys(topVariantFreqTableBySegment).sort();
@@ -269,7 +285,7 @@ looker.plugins.visualizations.add({
         thisTrace["text"] = [];
         for (let [segmentName, variantProb] of Object.entries(topVariantFreqTableBySegment)) {
           thisTrace["x"].push(variantProb);
-          thisTrace["y"].push(segmentName);
+          thisTrace["y"].push(segmentName + '<br>n=' + formatNumber(sampleSizeBySegment[segmentName]));
           let thisText = Math.round(variantProb) + '%';
           if (variantProb > 75) {
             thisText = thisText + ' &#x2b50;'
@@ -281,8 +297,10 @@ looker.plugins.visualizations.add({
       return traceArray;
     }
 
-    // Generate one trace per variant for plotting
-    
+    function formatNumber(num) {
+      return num.toString().replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1,')
+    }
+
     //Plotly.purge(chartElement);
     Plotly.react(chartElement,  {
       data: figureSample.data,
@@ -293,11 +311,8 @@ looker.plugins.visualizations.add({
       }
     }).then(function() {
       console.log('Finished loading. Now resizing.');
+      window.previousData = theData;
       resizePlot();
-      window.chartElement = chartElement;
-      console.log(chartElement.layout);
-
-
     });
 
     // SAMPLE: handle auto-resizing for Plotly chart
@@ -306,15 +321,14 @@ looker.plugins.visualizations.add({
         let bb = document.getElementById('canvas').getBoundingClientRect();
         console.log('Resizing! Height of canvas: ' + bb.height);
         // Set max height based on range of Y.
-        let yRange = Math.max(...chartElement.layout.yaxis.range) - Math.min(...chartElement.layout.yaxis.range);
-        console.log(yRange);
+        // let yRange = Math.max(...chartElement.layout.yaxis.range) - Math.min(...chartElement.layout.yaxis.range);
         //let heightOfPlot = bb.height - 70;
-        let heightOfPlot = Math.min(bb.height, yRange*90) - 70;
+        let heightOfPlot = Math.max(Math.min(bb.height, nSegments*100 + 70), 0);
         console.log('Setting height to ' + heightOfPlot);
         Plotly.relayout(chartElement, {
             width: bb.width,
-            //height: Math.min(bb.height, yRange*90) - 70
             height: heightOfPlot
+            //height: bb.height
         });
     }
     window.addEventListener('resize', function() {
