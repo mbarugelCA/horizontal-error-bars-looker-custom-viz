@@ -1,5 +1,5 @@
 import './styles/global.css'
-import { countBy, mapValues, cloneDeep, uniq, map, sumBy, reduce, isEqual } from 'lodash-es';
+import { countBy, mapValues, cloneDeep, uniq, map, sumBy, reduce, difference, isEqual } from 'lodash-es';
 let figureSample = require('./plotly-sample/figure.js').figure;
 
 // Simulation parameters
@@ -22,6 +22,14 @@ var lookerVisualizationOptions = {
     label: "Color Range",
     display: "colors",
     display_size: "third",
+  },
+  star_threshold: {
+    order: 2,
+    section: "Colors",
+    type: "number",
+    display: "number",
+    label: "% Threshold for winning variant (0-100)",
+    default: 90,
   },
   /*
   top_label: {
@@ -103,6 +111,17 @@ looker.plugins.visualizations.add({
     let chartElement = document.createElement('div');
     chartElement.id = 'the-plotly-chart'
     this._textElement.appendChild(chartElement);
+    
+    // Add an extra div in case we want to add some text after the chart
+    function insertAfter(newNode, referenceNode) {
+      referenceNode.parentNode.insertBefore(newNode, referenceNode.nextSibling);
+    }
+    let ref =  this._textElement;
+    let additionalInfoElement = document.createElement('div');
+    additionalInfoElement.id = 'additional-info';
+    additionalInfoElement.style.color = 'gray'
+    additionalInfoElement.style.fontSize = '13px'
+    insertAfter(additionalInfoElement, ref);
 
   },
   // Render in response to the data or settings changing
@@ -218,7 +237,7 @@ looker.plugins.visualizations.add({
         let sample = Array();
         let alpha = priorAlpha + variantData[0];
         let beta = priorBeta + Math.max(0, variantData[1] - variantData[0]);
-        console.log('Simulating variant ' + variantName + ' with alpha=' + alpha + ' and beta=' + beta);
+        // console.log('Simulating variant ' + variantName + ' with alpha=' + alpha + ' and beta=' + beta);
         for (let i = 0; i < Nsims; i++) {
           sample.push(jStat.beta.sample(alpha, beta))
         }
@@ -238,7 +257,6 @@ looker.plugins.visualizations.add({
 
       let topVariantFreqTable = mapValues(countBy(topVariantArray), (x) => 100*x/Nsims);
 
-
       return topVariantFreqTable;
     }
 
@@ -253,6 +271,20 @@ looker.plugins.visualizations.add({
 
       let traceSample = require('./plotly-sample/figure.js').traceSample;
       let traceArray = [];
+
+      // Remove cases with 1 variant, so they are not plotted
+      let singleVariantKeys = [];
+      Object.keys(topVariantFreqTableBySegment).forEach( function(key) { 
+        if (difference(Object.keys(topVariantFreqTableBySegment[key]), ['_sampleSize']).length === 1) {
+          console.log('We will NOT plot segment ' + key + ' because it only has 1 variant.');
+          singleVariantKeys.push(key);
+          delete topVariantFreqTableBySegment[key];
+        }
+      });
+      // Update the additional info div with variants that were removed
+      if (singleVariantKeys.length > 0) {
+        document.getElementById('additional-info').innerText = 'Ignoring cases: ' + singleVariantKeys.join(', ');
+      }
 
       // Get sample size by segment, and remove the _sampleSize key
       let sampleSizeBySegment = mapValues(topVariantFreqTableBySegment, (x) => x['_sampleSize']);
@@ -286,7 +318,7 @@ looker.plugins.visualizations.add({
           thisTrace["x"].push(variantProb);
           thisTrace["y"].push(segmentName + '<br>n=' + formatNumber(sampleSizeBySegment[segmentName]));
           let thisText = Math.round(variantProb) + '%';
-          if (variantProb > 75) {
+          if (variantProb > theOptions.star_threshold) {
             thisText = thisText + ' &#x2b50;'
           }
           thisTrace["text"].push(thisText);
