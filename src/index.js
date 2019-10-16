@@ -2,15 +2,6 @@ import './styles/global.css'
 import { countBy, mapValues, cloneDeep, uniq, map, sumBy, reduce, difference, isEqual } from 'lodash-es';
 let figureSample = require('./plotly-sample/figure.js').figure;
 
-// Simulation parameters
-const Nsims = 10;
-const priorAlpha = 1;
-const priorBeta = 10;
-
-const processLooker = true;
-
-
-let jStat = require('jstat').jStat;
 //let Plotly = require('plotly.js');
 let Plotly = require('plotly.js/lib/index-basic');
 
@@ -22,14 +13,6 @@ var lookerVisualizationOptions = {
     label: "Color Range",
     display: "colors",
     display_size: "third",
-  },
-  star_threshold: {
-    order: 2,
-    section: "Colors",
-    type: "number",
-    display: "number",
-    label: "% Threshold for winning variant (0-100)",
-    default: 90,
   },
   /*
   top_label: {
@@ -77,8 +60,8 @@ looker.plugins.visualizations.add({
   // Id and Label are legacy properties that no longer have any function besides documenting
   // what the visualization used to have. The properties are now set via the manifest
   // form within the admin/visualizations page of Looker
-  id: "bayesian-ab-testing-results",
-  label: "Bayesian A/B Testing Results",
+  id: "horizontal-error-bars",
+  label: "Horizontal Error Bars",
   options: lookerVisualizationOptions,
   // Set up the initial state of the visualization
   create: function(element, config) {
@@ -130,12 +113,12 @@ looker.plugins.visualizations.add({
     
     // Check for errors
     var requirementsMet = HandleErrors(this, queryResponse, {
-      min_measures: 2, 
-      max_measures: 2, 
+      min_measures: 3, 
+      max_measures: 4, 
       min_pivots: 0, 
       max_pivots: 0, 
       min_dimensions: 1, 
-      max_dimensions: 2,
+      max_dimensions: 1,
     })
     if (!requirementsMet) return
 
@@ -150,77 +133,20 @@ looker.plugins.visualizations.add({
     window.theQuery = theQuery
     window.theOptions = theOptions
 
-    window.jStat = jStat;
-
-    // Get measure names. The first one is assumed to be the number of trials; the second one is the number of successes.
-    let nTrialFieldName = theQuery.fields.measure_like[0].name;
-    let nSuccessFieldName = theQuery.fields.measure_like[1].name;
-
-    let nSegments;
-
-    if (theQuery.fields.dimension_like.length == 1) {
-      // If there's 1 dimension, each row represents a variant. There's a single segment.
-      let variantNameFieldName = theQuery.fields.dimension_like[0].name;
-      let nVariants = theData.length;
-      nSegments = 1;
-
-      let paramObject = {};
-      let sampleSize = 0
-      for (let variant = 0; variant < nVariants; variant++) {
-        let variantName = theData[variant][variantNameFieldName].value;
-        let successes = theData[variant][nSuccessFieldName].value ;
-        let trials = theData[variant][nTrialFieldName].value;
-        paramObject[variantName] = [successes, trials];
-        sampleSize = sampleSize + trials;
-      }
-
-      // Generate sim results
-      let simResults = simulateProbVariantIsBest(paramObject);
-      // Add sample size of segment to results
-      simResults['_sampleSize'] = sampleSize;
-      let simObject = {'Overall': simResults};
-
-      // Generate Traces
-      figureSample.data = generatePlotlyTraceArray(simObject);
-
-    } else if (theQuery.fields.dimension_like.length == 2) {
-      // If there's 2 dimensions, each row represents a segment-variant combination.
-      // We assume that the first dimension represents a segment, and the second one is a variant.
-      let segmentNameFieldName = theQuery.fields.dimension_like[0].name;
-      let variantNameFieldName = theQuery.fields.dimension_like[1].name;
-
-      let variantNames = uniq(map(theData, (x) => String(x[variantNameFieldName].value)));
-      let nVariants = variantNames.length;
-
-      let segmentNames = uniq(map(theData, (x) => x[segmentNameFieldName].value))
-      nSegments = segmentNames.length;
-
-      // Initialize objects for simulation
-      // simObject and paramObject will have one entry per segment
-      let paramObject = {};
-      for (let segmentName of segmentNames) {
-        paramObject[segmentName] = {}
-      }
-      let simObject = cloneDeep(paramObject);
-
-      for (let thisData of theData) {
-        let segmentName = thisData[segmentNameFieldName].value;
-        let variantName = thisData[variantNameFieldName].value;
-        let successes = thisData[nSuccessFieldName].value ;
-        let trials = thisData[nTrialFieldName].value;
-        paramObject[segmentName][variantName] = [successes, trials]
-      }
-      
-      // Generate sims and store results
-      for (let [segment, val] of Object.entries(simObject)) {
-        simObject[segment] = simulateProbVariantIsBest(paramObject[segment]);
-        simObject[segment]['_sampleSize'] = reduce(paramObject[segment], (sum,val) => sum+val[1], 0); //add sample size (number of trials) across all variants for this segment
-      }
-      
-      // Generate traces
-      figureSample.data = generatePlotlyTraceArray(simObject);
+    // Get measure names. The order is assumed to be as follows:
+    // 1: Value at the center of the bar
+    // 2: Lower bound of bar
+    // 3: Upper bound of bar
+    // 4 (Optional): sample size to display in labels
+    let centerValue = theQuery.fields.measure_like[0].name;
+    let lowerBoundValue = theQuery.fields.measure_like[1].name;
+    let upperBoundValue = theQuery.fields.measure_like[2].name;
+    let sampleSize;
+    if (theQuery.fields.measure_like.length == 4) {
+      let sampleSize = theQuery.fields.measure_like[3].name;
     }
-
+    figureSample.data = generatePlotlyTraceArray(simObject);
+    
     /** @description Computes the probability that each variant beats all others.  
      * @param {Object} paramArray An object with one key for each variant. The value for each key should be the number of successes and
      * number of trials for the variant. Example: {"c": [2, 100], "v1": [6, 102]} 
