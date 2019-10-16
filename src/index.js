@@ -3,7 +3,7 @@ import { countBy, mapValues, cloneDeep, uniq, map, sumBy, reduce, difference, is
 let figureSample = require('./plotly-sample/figure.js').figure;
 
 // Simulation parameters
-const Nsims = 10000;
+const Nsims = 10;
 const priorAlpha = 1;
 const priorBeta = 10;
 
