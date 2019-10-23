@@ -1,5 +1,5 @@
 import './styles/global.css'
-import { countBy, mapValues, cloneDeep, uniq, map, sumBy, reduce, difference, isEqual } from 'lodash-es';
+import { countBy, mapValues, cloneDeep, uniq, map, difference, reverse, max } from 'lodash-es';
 let figureSample = require('./plotly-sample/figure.js').figure;
 
 //let Plotly = require('plotly.js');
@@ -54,7 +54,7 @@ var lookerVisualizationOptions = {
   }*/
 }
 
-if (!processLooker) throw new Error;
+//if (!processLooker) throw new Error;
 
 looker.plugins.visualizations.add({
   // Id and Label are legacy properties that no longer have any function besides documenting
@@ -124,6 +124,8 @@ looker.plugins.visualizations.add({
 
     let chartElement = document.getElementById('the-plotly-chart');
 
+    data = reverse(data); //Reverse data for Plotly, so order of charting matches that in the data table
+
     // Set some global variables to help with debugging
     let theData = data
     let theQuery = queryResponse
@@ -133,131 +135,37 @@ looker.plugins.visualizations.add({
     window.theQuery = theQuery
     window.theOptions = theOptions
 
-    // Get measure names. The order is assumed to be as follows:
+    // Get measures data. The order is assumed to be as follows:
     // 1: Value at the center of the bar
     // 2: Lower bound of bar
     // 3: Upper bound of bar
     // 4 (Optional): sample size to display in labels
-    let centerValue = theQuery.fields.measure_like[0].name;
-    let lowerBoundValue = theQuery.fields.measure_like[1].name;
-    let upperBoundValue = theQuery.fields.measure_like[2].name;
-    let sampleSize;
-    if (theQuery.fields.measure_like.length == 4) {
-      let sampleSize = theQuery.fields.measure_like[3].name;
-    }
-    figureSample.data = generatePlotlyTraceArray(simObject);
+    let centerValue = map(theData, theQuery.fields.measure_like[0].name + '.value') 
+    let lowerBoundValue = map(theData, theQuery.fields.measure_like[1].name + '.value');
+    let upperBoundValue = map(theData, theQuery.fields.measure_like[2].name + '.value');
+    let diffMinus = map(centerValue, (val, index) => val - lowerBoundValue[index]);
+    let diffPlus = map(centerValue, (val, index) => upperBoundValue[index] - val);
     
-    /** @description Computes the probability that each variant beats all others.  
-     * @param {Object} paramArray An object with one key for each variant. The value for each key should be the number of successes and
-     * number of trials for the variant. Example: {"c": [2, 100], "v1": [6, 102]} 
-     * @return {Object} An object with one key for each variant, showing the probability that it is the best.
-     */  
-    function simulateProbVariantIsBest(paramArray) {
-      // Generate array of arrays of random beta values.
-      // Each "row" is a simulation instance and each "column" represents a variant
-      let samplesArray = Array();
-      let variantNamesArray = Array();
-      for (let [variantName, variantData] of Object.entries(paramArray)) {
-        variantNamesArray.push(variantName);
 
-        let sample = Array();
-        let alpha = priorAlpha + variantData[0];
-        let beta = priorBeta + Math.max(0, variantData[1] - variantData[0]);
-        // console.log('Simulating variant ' + variantName + ' with alpha=' + alpha + ' and beta=' + beta);
-        for (let i = 0; i < Nsims; i++) {
-          sample.push(jStat.beta.sample(alpha, beta))
-        }
-        samplesArray.push(sample);
-      }
-      samplesArray = jStat.transpose(samplesArray);
-      
-      // Find the top variant for each simulation, and tabulate the results
-      let topVariantArray = Array()
-      for (let sim = 0; sim < samplesArray.length; sim++) {
-        let indexOfMax = samplesArray[sim].indexOf(Math.max(...samplesArray[sim]));
-        topVariantArray.push(variantNamesArray[indexOfMax])
-      }
-      // To prevent cases in which a variant has no elements in which it's top, add a fake 'success' for each variant.
-      // With a large enough N, this addition is irrelevant (with N = 10,000, this adds a 0.01% prob of being top)
-      topVariantArray = topVariantArray.concat(variantNamesArray);
-
-      let topVariantFreqTable = mapValues(countBy(topVariantArray), (x) => 100*x/Nsims);
-
-      return topVariantFreqTable;
+    // Get dimension data
+    let dimLabels = map(theData, (x) => x[theQuery.fields.dimension_like[0].name]['value'].toString())
+    // Update labels if sample size was provided
+    if (theQuery.fields.measure_like.length == 4) {
+      let sampleSize = map(theData, theQuery.fields.measure_like[3].name + '.value');
+      dimLabels = map(dimLabels, (val, index) => val + ' (n=' + formatNumber(sampleSize[index]) + ')')
     }
-
-    /** @description Computes an array of traces that will be passed into the Plotly function for plotting.
-     * @param {Object} topVariantFreqTableBySegment Each key in this object is the segment of the experiment.
-     * Each value is an object in which each key is a variant and each value is the probability that that variant is the best.
-     * There's an optional additional key called '_sampleSize', which shows the total sample size across all variants, for display purposes.
-     * Example: {'Desktop': {'c': 90, 'v1': 10, '_sampleSize': 1392}, 'Mobile': {'c': 100, '_sampleSize': 248}}
-     * @return {Array} An array of 'trace' objects for Plotly
-     */  
-    function generatePlotlyTraceArray(topVariantFreqTableBySegment) {
-
-      let traceSample = require('./plotly-sample/figure.js').traceSample;
-      let traceArray = [];
-
-      // Remove cases with 1 variant, so they are not plotted
-      let singleVariantKeys = [];
-      Object.keys(topVariantFreqTableBySegment).forEach( function(key) { 
-        if (difference(Object.keys(topVariantFreqTableBySegment[key]), ['_sampleSize']).length === 1) {
-          console.log('We will NOT plot segment ' + key + ' because it only has 1 variant.');
-          singleVariantKeys.push(key);
-          delete topVariantFreqTableBySegment[key];
-        }
-      });
-      // Update the additional info div with variants that were removed
-      if (singleVariantKeys.length > 0) {
-        document.getElementById('additional-info').innerText = 'Ignoring cases: ' + singleVariantKeys.join(', ');
-      }
-
-      // Get sample size by segment, and remove the _sampleSize key
-      let sampleSizeBySegment = mapValues(topVariantFreqTableBySegment, (x) => x['_sampleSize']);
-      Object.keys(topVariantFreqTableBySegment).forEach( (key) => delete topVariantFreqTableBySegment[key]['_sampleSize'])
-      
-      // Restructure object so that each key is a variant, and each value has the values for that variant by segment
-      // Example: {'c': {'Mobile': 100, 'Desktop': 90}, 'v1': {'Desktop': 10}}
-      let segmentNames = Object.keys(topVariantFreqTableBySegment).sort();
-      let variantNames = []
-      for (let segment of segmentNames) {
-        variantNames = variantNames.concat(Object.keys(topVariantFreqTableBySegment[segment]));
-      }
-      variantNames = uniq(variantNames).sort();
-
-      let experimentDataRestructured = {}
-      for (let variant of variantNames) {
-        experimentDataRestructured[variant] = {}
-        for (let segment of segmentNames) {
-          experimentDataRestructured[variant][segment] = topVariantFreqTableBySegment[segment][variant]
-        }
-      }
-      
-      // Generate traces
-      for (let [variantName, topVariantFreqTableBySegment] of Object.entries(experimentDataRestructured)) {
-        let thisTrace = cloneDeep(traceSample);
-        thisTrace["name"] = variantName;
-        thisTrace["x"] = [];
-        thisTrace["y"] = [];
-        thisTrace["text"] = [];
-        for (let [segmentName, variantProb] of Object.entries(topVariantFreqTableBySegment)) {
-          thisTrace["x"].push(variantProb);
-          thisTrace["y"].push(segmentName + '<br>n=' + formatNumber(sampleSizeBySegment[segmentName]));
-          let thisText = Math.round(variantProb) + '%';
-          if (variantProb > theOptions.star_threshold) {
-            thisText = thisText + ' &#x2b50;'
-          }
-          thisTrace["text"].push(thisText);
-        }
-        traceArray.push(thisTrace)
-      }
-      return traceArray;
-    }
-
-    function formatNumber(num) {
-      return num.toString().replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1,')
-    }
-
+    let stringLengths = map(dimLabels, (x) => x.length)
+    let maxLabelLength = max(stringLengths);
+    let numberOfLabels = theData.length;
+    
+    // Update figure
+    figureSample.data[0].x = centerValue;
+    figureSample.data[0].y = dimLabels;
+    figureSample.data[0].error_x.array = diffPlus;
+    figureSample.data[0].error_x.arrayminus = diffMinus;
+    figureSample.layout.margin.l = Math.min(maxLabelLength * 4, 300);
+    console.log('Setting left margin to ' + figureSample.layout.margin.l);
+    
     //Plotly.purge(chartElement);
     Plotly.react(chartElement,  {
       data: figureSample.data,
@@ -272,7 +180,7 @@ looker.plugins.visualizations.add({
       resizePlot();
     });
 
-    // SAMPLE: handle auto-resizing for Plotly chart
+    // Handle auto-resizing for Plotly chart
     let resizeDebounce = null;
     function resizePlot() {
         let bb = document.getElementById('canvas').getBoundingClientRect();
@@ -280,7 +188,7 @@ looker.plugins.visualizations.add({
         // Set max height based on range of Y.
         // let yRange = Math.max(...chartElement.layout.yaxis.range) - Math.min(...chartElement.layout.yaxis.range);
         //let heightOfPlot = bb.height - 70;
-        let heightOfPlot = Math.max(Math.min(bb.height, nSegments*100 + 70), 0);
+        let heightOfPlot = Math.min(numberOfLabels*28 + 30, 1000);
         console.log('Setting height to ' + heightOfPlot);
         Plotly.relayout(chartElement, {
             width: bb.width,
@@ -295,11 +203,9 @@ looker.plugins.visualizations.add({
         resizeDebounce = window.setTimeout(resizePlot, 100);
     });
     
-    
-    
-
-    
-
+    function formatNumber(num) {
+      return num.toString().replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1,')
+    }
 
     // EXAMPLE: Register additional options
     // newOptions = lookerVisualizationOptions

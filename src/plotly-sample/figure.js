@@ -19,10 +19,13 @@ let figure = {
     "layout": {
         xaxis: {
             tickformat: ',.1%',
+            side: 'top',
             //range: [0,1]
         },
         margin: {
             l: 150,
+            t: 25,
+            b: 20,
         }
     },
     "frames": []
