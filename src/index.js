@@ -1,5 +1,5 @@
 import './styles/global.css'
-import { countBy, mapValues, cloneDeep, uniq, map, difference, reverse, max } from 'lodash-es';
+import { map, reverse, max } from 'lodash-es';
 let figureSample = require('./plotly-sample/figure.js').figure;
 
 //let Plotly = require('plotly.js');
