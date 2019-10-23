@@ -26,7 +26,9 @@ let figure = {
             l: 150,
             t: 25,
             b: 20,
-        }
+        },
+        dragmode: false,
+        hovermode: false,
     },
     "frames": []
 }
